@@ -66,6 +66,11 @@
       gap: 1rem;
       margin-top: 2rem;
     }
+    .warning {
+      color: red;
+      font-weight: bold;
+      margin: 1rem 0;
+    }
   </style>
 </head>
 <body>
@@ -75,6 +80,7 @@
 
   <label for="plank">Antal plank:</label>
   <input type="number" id="plank" />
+  <div class="warning" id="varning"></div>
 
   <div class="selector-container">
     <div>
@@ -87,8 +93,12 @@
     </div>
   </div>
 
-  <label for="kund">Brädor till kund:</label>
-  <input type="number" id="kund" />
+  <label>Brädor till kund(er):</label>
+  <div class="kund-controls">
+    <button onclick="laggTillKund()">+</button>
+    <button onclick="taBortKund()">–</button>
+  </div>
+  <div id="kund-container"></div>
 
   <button onclick="berakna()">Beräkna</button>
 
@@ -106,11 +116,6 @@
     let valdTjocklek = 0;
     let paketLista = [];
     let aktuellIndex = 0;
-    let senasteKund = 0;
-    let senasteFaktiska = 0;
-    let senasteTotBrador = 0;
-    let senasteKundLager = 0;
-    let kundPak = [], restPak = [];
 
     const knappContainer = document.getElementById('dimension-buttons');
     [4,5,6,7,8,9].forEach(d => {
@@ -136,6 +141,23 @@
       tjocklekContainer.appendChild(btn);
     });
 
+    function laggTillKund() {
+      const container = document.getElementById("kund-container");
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "kund-input";
+      input.placeholder = "Antal brädor";
+      container.appendChild(input);
+    }
+
+    function taBortKund() {
+      const container = document.getElementById("kund-container");
+      const inputs = container.getElementsByClassName("kund-input");
+      if (inputs.length > 0) {
+        container.removeChild(inputs[inputs.length - 1]);
+      }
+    }
+
     function paketfordelning(lager, minLager, maxLager) {
       if (lager < minLager) return [lager];
       for (let antal = 1; antal <= lager; antal++) {
@@ -157,46 +179,62 @@
     function berakna() {
       const kundOut = document.getElementById("kundOut");
       const restOut = document.getElementById("restOut");
-      const plank = parseInt(document.getElementById("plank").value) || 0;
-      const kund = parseInt(document.getElementById("kund").value) || 0;
+      const varning = document.getElementById("varning");
+      kundOut.textContent = "";
+      restOut.textContent = "";
+      varning.textContent = "";
 
-      if (!plank || !kund) {
-        kundOut.textContent = "Fyll i antal plank och antal brädor till kund.";
-        restOut.textContent = "";
+      const plank = parseInt(document.getElementById("plank").value) || 0;
+      const kundInputs = document.querySelectorAll(".kund-input");
+      const kundVarden = Array.from(kundInputs).map(input => parseInt(input.value) || 0).filter(v => v > 0);
+
+      if (!plank) {
+        kundOut.textContent = "Fyll i antal plank.";
         return;
       }
       if (!valdDimension) {
         kundOut.textContent = "Välj en dimension.";
-        restOut.textContent = "";
         document.querySelectorAll('.dimension-buttons button').forEach(b => b.classList.add("error"));
         return;
       }
       if (!valdTjocklek) {
         kundOut.textContent = "Välj en tjocklek.";
-        restOut.textContent = "";
         document.querySelectorAll('.tjocklek-buttons button').forEach(b => b.classList.add("error"));
         return;
       }
 
       const bpl = bradorPerLager[valdDimension];
       const totBrador = plank * 2;
-      const kundLager = Math.ceil(kund / bpl);
       const [minLager, maxLager] = (valdTjocklek === 28) ? [12, 21] : [16, 28];
 
-      kundPak = paketfordelning(kundLager, minLager, maxLager);
-      const kundBrador = kundPak.map(l => l * bpl);
-      const faktiska = kundBrador.reduce((a,b) => a + b, 0);
-      const kvar = totBrador - faktiska;
-      const restLager = Math.ceil(kvar / bpl);
-      restPak = paketfordelning(restLager, minLager, maxLager);
-      const restBrador = restPak.map(l => Math.min(l * bpl, kvar));
+      paketLista = [];
+      let totalKundBrador = 0;
 
-      paketLista = [...kundBrador.map((b, i) => ({ typ: 'kund', varde: b, lager: kundPak[i] })), ...restBrador.map((b, i) => ({ typ: 'rest', varde: b, lager: restPak[i] }))];
+      kundVarden.forEach((kundBr, kundIndex) => {
+        const kundLager = Math.ceil(kundBr / bpl);
+        const lagerLista = paketfordelning(kundLager, minLager, maxLager);
+        lagerLista.forEach(l => {
+          paketLista.push({ typ: 'kund', kund: kundIndex + 1, lager: l, varde: l * bpl });
+        });
+        totalKundBrador += lagerLista.reduce((sum, l) => sum + l * bpl, 0);
+      });
+
+      let kvar = totBrador - totalKundBrador;
+
+      if (kvar < 0) {
+        varning.innerHTML = `❗ <b>Det saknas ${Math.abs(kvar / 2)} plank</b> för att täcka kundernas behov.`;
+      }
+
+      if (kvar > 0) {
+        const restLager = Math.ceil(kvar / bpl);
+        const restPak = paketfordelning(restLager, minLager, maxLager);
+        restPak.forEach(l => {
+          paketLista.push({ typ: 'rest', lager: l, varde: Math.min(l * bpl, kvar) });
+          kvar -= l * bpl;
+        });
+      }
+
       aktuellIndex = 0;
-      senasteKund = kund;
-      senasteFaktiska = faktiska;
-      senasteTotBrador = totBrador;
-      senasteKundLager = kundLager;
       visaPaket();
     }
 
@@ -206,27 +244,42 @@
       kundOut.textContent = "";
       restOut.textContent = "";
 
-      const markerad = paketLista.map((p, i) => i === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : `${p.varde}`);
-      const markeradLager = paketLista.map((p, i) => i === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : `${p.lager}`);
+      const kunder = paketLista.filter(p => p.typ === 'kund').reduce((acc, p) => {
+        if (!acc[p.kund]) acc[p.kund] = [];
+        acc[p.kund].push(p);
+        return acc;
+      }, {});
 
-      const kundPaket = paketLista.filter(p => p.typ === 'kund');
-      const restPaket = paketLista.filter(p => p.typ === 'rest');
+      let kundText = "";
+      for (const [kundNr, paket] of Object.entries(kunder)) {
+        const totalBr = paket.reduce((sum, p) => sum + p.varde, 0);
+        const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
+        kundText += `Kund ${kundNr}:
+Totalt ${totalLag} lager ⇒ ${paket.length} paket
+`;
 
-      const kundText = kundPaket.length
-        ? `Brädor totalt: ${senasteTotBrador}
-Brädor till kund: ${senasteKund} → ${senasteKundLager} lager = ${senasteFaktiska} brädor${senasteFaktiska>senasteKund ? ` (+${senasteFaktiska - senasteKund} extra)` : ''}
+        const markeradLager = paket.map((p, i) => {
+          const index = paketLista.indexOf(p);
+          return (index === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager);
+        });
 
-Kundens paket:
-Antal paket: ${kundPaket.length}
-Brädor per paket: ${markerad.slice(0, kundPaket.length).join(', ')}
-Lager per paket: ${markeradLager.slice(0, kundPaket.length).join(', ')}`
-        : "";
-      const restText = restPaket.length
-        ? `Resterande paket:
-Antal paket: ${restPaket.length}
-Brädor per paket: ${markerad.slice(kundPaket.length).join(', ')}
-Lager per paket: ${markeradLager.slice(kundPaket.length).join(', ')}`
-        : "";
+        const markeradBrador = paket.map((p, i) => {
+          const index = paketLista.indexOf(p);
+          return (index === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde);
+        });
+
+        kundText += `  Lager: ${markeradLager.join(', ')}
+`;
+        kundText += `  Brädor: ${markeradBrador.join(', ')}
+
+`;
+      }
+
+      const restPak = paketLista.filter(p => p.typ === 'rest');
+      const restText = restPak.length ? `Resterande paket:
+Antal paket: ${restPak.length}
+Lager per paket: ${restPak.map((p, i) => (aktuellIndex === paketLista.indexOf(p) ? `<span class='bold'>${p.lager}</span>` : p.lager)).join(', ')}
+Brädor per paket: ${restPak.map((p, i) => (aktuellIndex === paketLista.indexOf(p) ? `<span class='bold'>${p.varde}</span>` : p.varde)).join(', ')}` : "";
 
       kundOut.innerHTML = kundText;
       restOut.innerHTML = restText;
@@ -245,6 +298,10 @@ Lager per paket: ${markeradLager.slice(kundPaket.length).join(', ')}`
         visaPaket();
       }
     }
+
+    window.onload = () => {
+      laggTillKund();
+    };
   </script>
 </body>
 </html>
