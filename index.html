@@ -71,6 +71,56 @@
       font-weight: bold;
       margin: 1rem 0;
     }
+    .paket-knappar {
+      display: inline-flex;
+      gap: 0.5rem;
+      margin-left: 1rem;
+    }
+    .paket-knappar button {
+      padding: 0.2rem 0.6rem;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      background: #fff;
+      color: #000;
+      cursor: pointer;
+    }
+    .kund-rad {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+    #urHyvelSelect {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  min-width: 2.5rem;
+  min-height: 1.8rem;
+  border-radius: 4px;
+  border: none;
+  background-color: #fff;
+  color: #000;
+  margin-bottom: 1rem;
+}
+
+    .knappgrupp {
+  display: inline-flex;
+  gap: 0.5rem;
+  margin-left: 1rem;
+}
+.knappgrupp button {
+  padding: 0.2rem 0.6rem;
+  font-size: 1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+}
+
   </style>
 </head>
 <body>
@@ -84,14 +134,27 @@
 
   <div class="selector-container">
     <div>
-      <label>Välj dimension:</label>
-      <div class="dimension-buttons" id="dimension-buttons"></div>
-    </div>
-    <div>
-      <label>Välj tjocklek:</label>
-      <div class="tjocklek-buttons" id="tjocklek-buttons"></div>
-    </div>
+ 
+<!-- Först dropdownen som ligger ovanför hela raden -->
+<label for="urHyvelSelect">Välj antal ur hyvel:</label>
+<select id="urHyvelSelect">
+  <option value="1" selected>1</option>
+  <option value="2">2</option>
+  <option value="3">3</option>
+</select>
+
+<!-- Nu horisontell rad där båda kolumnerna börjar på samma höjd -->
+<div class="selector-container">
+  <div>
+    <label>Välj dimension:</label>
+    <div class="dimension-buttons" id="dimension-buttons"></div>
   </div>
+  <div>
+    <label>Välj tjocklek:</label>
+    <div class="tjocklek-buttons" id="tjocklek-buttons"></div>
+  </div>
+</div>
+
 
   <label>Brädor till kund(er):</label>
   <div class="kund-controls">
@@ -116,6 +179,9 @@
     let valdTjocklek = 0;
     let paketLista = [];
     let aktuellIndex = 0;
+    let valUrHyvel = 1;
+    
+
 
     const knappContainer = document.getElementById('dimension-buttons');
     [4,5,6,7,8,9].forEach(d => {
@@ -142,20 +208,70 @@
     });
 
     function laggTillKund() {
-      const container = document.getElementById("kund-container");
-      const input = document.createElement("input");
-      input.type = "number";
-      input.className = "kund-input";
-      input.placeholder = "Antal brädor";
-      container.appendChild(input);
-    }
+  const container = document.getElementById("kund-container");
+
+  const rad = document.createElement("div");
+  rad.className = "kund-rad";
+
+  const input = document.createElement("input");
+  input.type = "number";
+  input.className = "kund-input";
+  input.placeholder = "Antal brädor";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.className = "malas-checkbox";
+
+  const label = document.createElement("label");
+  label.textContent = "målas";
+  label.style.marginLeft = "0.3rem";
+
+  rad.appendChild(input);
+  rad.appendChild(checkbox);
+  rad.appendChild(label);
+
+  container.appendChild(rad);
+}
+
+
 
     function taBortKund() {
-      const container = document.getElementById("kund-container");
-      const inputs = container.getElementsByClassName("kund-input");
-      if (inputs.length > 0) {
-        container.removeChild(inputs[inputs.length - 1]);
-      }
+  const container = document.getElementById("kund-container");
+  const rader = container.getElementsByClassName("kund-rad");
+  if (rader.length > 0) {
+    container.removeChild(rader[rader.length - 1]);
+  }
+}
+
+
+    function jamnFodelning(totalLager, antalPak) {
+      const bas = Math.floor(totalLager / antalPak);
+      const extra = totalLager % antalPak;
+      return Array.from({ length: antalPak }, (_, i) => bas + (i < extra ? 1 : 0));
+    }
+
+    function justeraPaket(kundNr, andring) {
+      const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+
+      const paket = paketLista.filter(p => p.typ === 'kund' && p.kund == kundNr);
+      const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
+      let antal = paket.length + andring;
+      if (antal < 1) return;
+      const ny = jamnFodelning(totalLag, antal).map(l => ({ typ: 'kund', kund: parseInt(kundNr), lager: l, varde: l * bpl }));
+      paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund == kundNr)).concat(ny);
+      visaPaket();
+    }
+
+    function justeraRest(andring) {
+      const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+
+      const rest = paketLista.filter(p => p.typ === 'rest');
+      const totalLag = rest.reduce((sum, p) => sum + p.lager, 0);
+      let antal = rest.length + andring;
+      if (antal < 1) return;
+      const ny = jamnFodelning(totalLag, antal).map(l => ({ typ: 'rest', lager: l, varde: l * bpl }));
+      paketLista = paketLista.filter(p => p.typ !== 'rest').concat(ny);
+      visaPaket();
     }
 
     function paketfordelning(lager, minLager, maxLager) {
@@ -185,8 +301,18 @@
       varning.textContent = "";
 
       const plank = parseInt(document.getElementById("plank").value) || 0;
-      const kundInputs = document.querySelectorAll(".kund-input");
-      const kundVarden = Array.from(kundInputs).map(input => parseInt(input.value) || 0).filter(v => v > 0);
+      const kundRader = document.querySelectorAll(".kund-rad");
+const kundData = [];
+
+kundRader.forEach(rad => {
+  const input = rad.querySelector(".kund-input");
+  const checkbox = rad.querySelector(".malas-checkbox");
+
+  const antal = parseInt(input.value) || 0;
+  if (antal > 0) {
+    kundData.push({ antal: antal, mala: checkbox.checked });
+  }
+});
 
       if (!plank) {
         kundOut.textContent = "Fyll i antal plank.";
@@ -203,21 +329,38 @@
         return;
       }
 
-      const bpl = bradorPerLager[valdDimension];
-      const totBrador = plank * 2;
+      const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+
+      const totBrador = plank * valUrHyvel * 2;
       const [minLager, maxLager] = (valdTjocklek === 28) ? [12, 21] : [16, 28];
 
       paketLista = [];
       let totalKundBrador = 0;
 
-      kundVarden.forEach((kundBr, kundIndex) => {
-        const kundLager = Math.ceil(kundBr / bpl);
-        const lagerLista = paketfordelning(kundLager, minLager, maxLager);
-        lagerLista.forEach(l => {
-          paketLista.push({ typ: 'kund', kund: kundIndex + 1, lager: l, varde: l * bpl });
-        });
-        totalKundBrador += lagerLista.reduce((sum, l) => sum + l * bpl, 0);
-      });
+      kundData.forEach((kund, kundIndex) => {
+  const kundLager = Math.ceil(kund.antal / bpl);
+  let lagerLista = paketfordelning(kundLager, minLager, maxLager);
+
+  // Slå ihop två och två om checkboxen är ikryssad
+  if (kund.mala) {
+    const nyLista = [];
+    for (let i = 0; i < lagerLista.length; i += 2) {
+      if (i + 1 < lagerLista.length) {
+        nyLista.push(lagerLista[i] + lagerLista[i + 1]);
+      } else {
+        nyLista.push(lagerLista[i]);
+      }
+    }
+    lagerLista = nyLista;
+  }
+
+  lagerLista.forEach(l => {
+    paketLista.push({ typ: 'kund', kund: kundIndex + 1, lager: l, varde: l * bpl });
+  });
+
+  totalKundBrador += lagerLista.reduce((sum, l) => sum + l * bpl, 0);
+});
+
 
       let kvar = totBrador - totalKundBrador;
 
@@ -238,52 +381,70 @@
       visaPaket();
     }
 
-    function visaPaket() {
-      const kundOut = document.getElementById("kundOut");
-      const restOut = document.getElementById("restOut");
-      kundOut.textContent = "";
-      restOut.textContent = "";
+function visaPaket() {
+  const kundOut = document.getElementById("kundOut");
+  const restOut = document.getElementById("restOut");
+  kundOut.textContent = "";
+  restOut.textContent = "";
 
-      const kunder = paketLista.filter(p => p.typ === 'kund').reduce((acc, p) => {
-        if (!acc[p.kund]) acc[p.kund] = [];
-        acc[p.kund].push(p);
-        return acc;
-      }, {});
+  const kunder = paketLista.filter(p => p.typ === 'kund').reduce((acc, p) => {
+    if (!acc[p.kund]) acc[p.kund] = [];
+    acc[p.kund].push(p);
+    return acc;
+  }, {});
 
-      let kundText = "";
-      for (const [kundNr, paket] of Object.entries(kunder)) {
-        const totalBr = paket.reduce((sum, p) => sum + p.varde, 0);
-        const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
-        kundText += `Kund ${kundNr}:
-Totalt ${totalLag} lager ⇒ ${paket.length} paket
-`;
+  let kundText = "";
+  for (const [kundNr, paket] of Object.entries(kunder)) {
+    const totalBr = paket.reduce((sum, p) => sum + p.varde, 0);
+    const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
+    kundText += `Kund ${kundNr}:\n`;
+    kundText += `Totalt ${totalLag} lager ⇒ ${paket.length} paket `;
+kundText += `<span class="knappgrupp">
+  <button onclick="justeraPaket(${kundNr}, -1)">–</button>
+  <button onclick="justeraPaket(${kundNr}, 1)">+</button>
+</span>\n`;
 
-        const markeradLager = paket.map((p, i) => {
-          const index = paketLista.indexOf(p);
-          return (index === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager);
-        });
 
-        const markeradBrador = paket.map((p, i) => {
-          const index = paketLista.indexOf(p);
-          return (index === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde);
-        });
+    const markeradLager = paket.map(p =>
+      paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager
+    );
 
-        kundText += `  Lager: ${markeradLager.join(', ')}
-`;
-        kundText += `  Brädor: ${markeradBrador.join(', ')}
+    const markeradBrador = paket.map(p =>
+      paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde
+    );
 
-`;
-      }
+    kundText += `  Lager: ${markeradLager.join(', ')}\n`;
+    kundText += `  Brädor: ${markeradBrador.join(', ')}\n\n`;
+  }
 
-      const restPak = paketLista.filter(p => p.typ === 'rest');
-      const restText = restPak.length ? `Resterande paket:
-Antal paket: ${restPak.length}
-Lager per paket: ${restPak.map((p, i) => (aktuellIndex === paketLista.indexOf(p) ? `<span class='bold'>${p.lager}</span>` : p.lager)).join(', ')}
-Brädor per paket: ${restPak.map((p, i) => (aktuellIndex === paketLista.indexOf(p) ? `<span class='bold'>${p.varde}</span>` : p.varde)).join(', ')}` : "";
+  const restPak = paketLista.filter(p => p.typ === 'rest');
+  let restText = "";
+  if (restPak.length) {
+const totalRestLager = restPak.reduce((sum, p) => sum + p.lager, 0);
+restText += `Resterande paket:\n`;
+restText += `Totalt ${totalRestLager} lager ⇒ ${restPak.length} paket `;
+restText += `<span class="knappgrupp">
+  <button onclick="justeraRest(-1)">–</button>
+  <button onclick="justeraRest(1)">+</button>
+</span>\n`;
 
-      kundOut.innerHTML = kundText;
-      restOut.innerHTML = restText;
-    }
+const markeradLager = restPak.map(p =>
+  paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager
+);
+
+const markeradBrador = restPak.map(p =>
+  paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde
+);
+
+restText += `  Lager: ${markeradLager.join(', ')}\n`;
+restText += `  Brädor: ${markeradBrador.join(', ')}`;
+
+  }
+
+  kundOut.innerHTML = kundText;
+  restOut.innerHTML = restText;
+}
+
 
     function visaNasta() {
       if (aktuellIndex < paketLista.length - 1) {
@@ -300,6 +461,10 @@ Brädor per paket: ${restPak.map((p, i) => (aktuellIndex === paketLista.indexOf(
     }
 
     window.onload = () => {
+      document.getElementById("urHyvelSelect").addEventListener("change", e => {
+  valUrHyvel = parseInt(e.target.value);
+});
+
       laggTillKund();
     };
   </script>
