@@ -154,14 +154,18 @@
   </div>
 </div>
  <label for="plank">Antal plank:</label>
-<input type="number" id="plank" />
+<input type="text" id="plank" />
 <div class="warning" id="varning"></div>
 
-  <label>Brädor till kund(er):</label>
-  <div class="kund-controls">
-    <button onclick="laggTillKund()">+</button>
+  <div style="display: flex; align-items: center; gap: 1rem; margin-top: 1rem;">
+  <label style="margin: 0;">Brädor till kund(er):</label>
+  <div class="knappgrupp">
     <button onclick="taBortKund()">–</button>
+    <button onclick="laggTillKund()">+</button>
   </div>
+</div>
+
+
   <div id="kund-container"></div>
 
   <button onclick="berakna()">Beräkna</button>
@@ -181,6 +185,9 @@
     let paketLista = [];
     let aktuellIndex = 0;
     let valUrHyvel = 1;
+    let kundOriginalLager = {};
+let kundOriginalPaketering = {};
+
     
 
 
@@ -252,16 +259,41 @@
     }
 
     function justeraPaket(kundNr, andring) {
-      const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+  const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+  const paket = paketLista.filter(p => p.typ === 'kund' && p.kund == kundNr);
+  const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
+  let antal = paket.length + andring;
+  if (antal < 1) return;
 
-      const paket = paketLista.filter(p => p.typ === 'kund' && p.kund == kundNr);
-      const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
-      let antal = paket.length + andring;
-      if (antal < 1) return;
-      const ny = jamnFodelning(totalLag, antal).map(l => ({ typ: 'kund', kund: parseInt(kundNr), lager: l, varde: l * bpl }));
-      paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund == kundNr)).concat(ny);
-      visaPaket();
-    }
+  const originalPaketering = kundOriginalPaketering[kundNr];
+  if (originalPaketering && originalPaketering.length === antal) {
+    const ny = originalPaketering.map(l => ({
+      typ: 'kund',
+      kund: parseInt(kundNr),
+      lager: l,
+      varde: l * bpl
+    }));
+    paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund == kundNr)).concat(ny);
+    visaPaket();
+    return;
+  }
+
+  const ursprung = kundOriginalLager[kundNr];
+  if (!ursprung || ursprung.length === 0) return;
+
+  const total = ursprung.reduce((sum, x) => sum + x, 0);
+  const nyLager = jamnFodelning(total, antal);
+  const ny = nyLager.map(l => ({
+    typ: 'kund',
+    kund: parseInt(kundNr),
+    lager: l,
+    varde: l * bpl
+  }));
+
+  paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund == kundNr)).concat(ny);
+  visaPaket();
+}
+
 
     function justeraRest(andring) {
       const bpl = bradorPerLager[valdDimension] * valUrHyvel;
@@ -292,6 +324,22 @@
       }
       return [lager];
     }
+function rensaTillBeraknadPlank() {
+  const input = document.getElementById("plank");
+  const value = input.value.split('=')[0].trim(); // Ta bort ev. gammalt =värde
+
+  try {
+    const rensat = value.replace(/[^-()\d/*+.]/g, '');
+    const result = Math.floor(eval(rensat));
+    if (!isNaN(result)) {
+      input.value = result;  // Ersätt hela uttrycket med resultatet
+      return result;
+    }
+  } catch {
+    input.value = ""; // Rensa om det inte går att räkna ut
+  }
+  return 0;
+}
 
     function berakna() {
       const kundOut = document.getElementById("kundOut");
@@ -301,7 +349,9 @@
       restOut.textContent = "";
       varning.textContent = "";
 
-      const plank = parseInt(document.getElementById("plank").value) || 0;
+      const plank = rensaTillBeraknadPlank();
+
+
       const kundRader = document.querySelectorAll(".kund-rad");
 const kundData = [];
 
@@ -342,7 +392,8 @@ kundRader.forEach(rad => {
   const kundLager = Math.ceil(kund.antal / bpl);
   let lagerLista = paketfordelning(kundLager, minLager, maxLager);
 
-  // Slå ihop två och två om checkboxen är ikryssad
+  kundOriginalLager[kundIndex + 1] = [...lagerLista]; // spara innan ev. hopslagning
+
   if (kund.mala) {
     const nyLista = [];
     for (let i = 0; i < lagerLista.length; i += 2) {
@@ -352,8 +403,10 @@ kundRader.forEach(rad => {
         nyLista.push(lagerLista[i]);
       }
     }
+    kundOriginalPaketering[kundIndex + 1] = [...nyLista]; // spara hopslagen
     lagerLista = nyLista;
   }
+
 
   lagerLista.forEach(l => {
     paketLista.push({ typ: 'kund', kund: kundIndex + 1, lager: l, varde: l * bpl });
@@ -361,6 +414,23 @@ kundRader.forEach(rad => {
 
   totalKundBrador += lagerLista.reduce((sum, l) => sum + l * bpl, 0);
 });
+// Spara info om varje kunds behov vs faktisk utdelning
+window.kundExtraBrador = kundData.map((kund, i) => {
+  const kundPaket = paketLista.filter(p => p.typ === 'kund' && p.kund === i + 1);
+  const verkligaBrador = kundPaket.reduce((sum, p) => sum + p.varde, 0);
+  return {
+    behov: kund.antal,
+    verkliga: verkligaBrador,
+    extra: verkligaBrador - kund.antal
+  };
+});
+
+let totaltKundbehov = kundData.reduce((sum, k) => sum + k.antal, 0);
+let extra = totalKundBrador - totaltKundbehov;
+if (extra > 0) {
+  kundOut.innerHTML += `<br><span class="warning">➕ Kunden får ${extra} extra brädor p.g.a. avrundning</span>`;
+}
+
 
 
       let kvar = totBrador - totalKundBrador;
@@ -399,7 +469,18 @@ function visaPaket() {
     const totalBr = paket.reduce((sum, p) => sum + p.varde, 0);
     const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
     kundText += `Kund ${kundNr}:\n`;
-    kundText += `Totalt ${totalLag} lager ⇒ ${paket.length} paket `;
+    const extra = window.kundExtraBrador?.[kundNr - 1]?.extra || 0;
+kundText += `Totalt ${totalBr} brädor ⇒ ${paket.length} paket`;
+if (extra > 0) {
+  kundText += ` (${extra} extra)`;
+
+}
+kundText += ` <span class="knappgrupp">
+  <button onclick="justeraPaket(${kundNr}, -1)">–</button>
+  <button onclick="justeraPaket(${kundNr}, 1)">+</button>
+</span>\n`;
+
+
 kundText += `<span class="knappgrupp">
   <button onclick="justeraPaket(${kundNr}, -1)">–</button>
   <button onclick="justeraPaket(${kundNr}, 1)">+</button>
@@ -462,12 +543,21 @@ restText += `  Brädor: ${markeradBrador.join(', ')}`;
     }
 
     window.onload = () => {
-      document.getElementById("urHyvelSelect").addEventListener("change", e => {
-  valUrHyvel = parseInt(e.target.value);
-});
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      rensaTillBeraknadPlank();  // Ny funktion vi skapade
+      berakna();
+    }
+  });
 
-      laggTillKund();
-    };
+  document.getElementById("urHyvelSelect").addEventListener("change", e => {
+    valUrHyvel = parseInt(e.target.value);
+  });
+
+  laggTillKund();
+};
+
   </script>
 </body>
 </html>
