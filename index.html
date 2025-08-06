@@ -229,6 +229,12 @@ let kundOriginalPaketering = {};
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.className = "malas-checkbox";
+checkbox.addEventListener("change", () => {
+  const container = document.getElementById("kund-container");
+  const kundIndex = [...container.children].indexOf(rad);
+  uppdateraKundPaketering(kundIndex);
+});
+
 
   const label = document.createElement("label");
   label.textContent = "målas";
@@ -257,6 +263,40 @@ let kundOriginalPaketering = {};
       const extra = totalLager % antalPak;
       return Array.from({ length: antalPak }, (_, i) => bas + (i < extra ? 1 : 0));
     }
+function uppdateraKundPaketering(kundIndex) {
+  const checkbox = document.querySelectorAll(".kund-rad")[kundIndex].querySelector(".malas-checkbox");
+  const malaNu = checkbox?.checked;
+  const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+
+  const ursprung = kundOriginalLager[kundIndex + 1];
+  if (!ursprung) return;
+
+  let lagerLista = [...ursprung];
+
+  if (malaNu) {
+    const nyLista = [];
+    for (let i = 0; i < lagerLista.length; i += 2) {
+      if (i + 1 < lagerLista.length) {
+        nyLista.push(lagerLista[i] + lagerLista[i + 1]);
+      } else {
+        nyLista.push(lagerLista[i]);
+      }
+    }
+    lagerLista = nyLista;
+  }
+
+  const ny = lagerLista.map(l => ({
+    typ: 'kund',
+    kund: kundIndex + 1,
+    lager: l,
+    varde: l * bpl
+  }));
+
+  paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund === kundIndex + 1)).concat(ny);
+  aktuellIndex = 0;
+
+  visaPaket();
+}
 
     function justeraPaket(kundNr, andring) {
   const bpl = bradorPerLager[valdDimension] * valUrHyvel;
@@ -463,6 +503,14 @@ function visaPaket() {
     acc[p.kund].push(p);
     return acc;
   }, {});
+  // Säkerställ att aktuellIndex är inom giltigt intervall
+if (aktuellIndex >= paketLista.length) {
+  aktuellIndex = paketLista.length - 1;
+}
+if (aktuellIndex < 0) {
+  aktuellIndex = 0;
+}
+
 
   let kundText = "";
   for (const [kundNr, paket] of Object.entries(kunder)) {
@@ -475,11 +523,6 @@ if (extra > 0) {
   kundText += ` (${extra} extra)`;
 
 }
-kundText += ` <span class="knappgrupp">
-  <button onclick="justeraPaket(${kundNr}, -1)">–</button>
-  <button onclick="justeraPaket(${kundNr}, 1)">+</button>
-</span>\n`;
-
 
 kundText += `<span class="knappgrupp">
   <button onclick="justeraPaket(${kundNr}, -1)">–</button>
