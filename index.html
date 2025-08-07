@@ -344,16 +344,26 @@ function uppdateraKundPaketering(kundIndex) {
 
 
     function justeraRest(andring) {
-      const bpl = bradorPerLager[valdDimension] * valUrHyvel;
+  const bpl = bradorPerLager[valdDimension] * valUrHyvel;
 
-      const rest = paketLista.filter(p => p.typ === 'rest');
-      const totalLag = rest.reduce((sum, p) => sum + p.lager, 0);
-      let antal = rest.length + andring;
-      if (antal < 1) return;
-      const ny = jamnFodelning(totalLag, antal).map(l => ({ typ: 'rest', lager: l, varde: l * bpl }));
-      paketLista = paketLista.filter(p => p.typ !== 'rest').concat(ny);
-      visaPaket();
-    }
+  const rest = paketLista.filter(p => p.typ === 'rest');
+  const totalLag = rest.reduce((sum, p) => sum + p.lager, 0);
+  let antal = rest.length + andring;
+  if (antal < 1) return;
+  const ny = jamnFodelning(totalLag, antal).map(l => ({ typ: 'rest', lager: l, varde: l * bpl }));
+  
+  // Uppdatera paketLista
+  paketLista = paketLista.filter(p => p.typ !== 'rest').concat(ny);
+  
+  // 🔹 Peka om aktuellIndex till första restpaket
+  const nyIndex = paketLista.findIndex(p => p.typ === 'rest');
+  if (nyIndex !== -1) {
+    aktuellIndex = nyIndex;
+  }
+
+  visaPaket(false); // Ingen scroll
+}
+
 
     function paketfordelning(lager, minLager, maxLager) {
       if (lager < minLager) return [lager];
@@ -502,8 +512,8 @@ if (extra > 0) {
 
     }
 
-function visaPaket() {
-  const scrollY = window.scrollY; // 🔹 Spara nuvarande scrollposition
+function visaPaket(scrolla = false) {
+
 
   const kundOut = document.getElementById("kundOut");
   const restOut = document.getElementById("restOut");
@@ -569,6 +579,9 @@ function visaPaket() {
 
   kundOut.innerHTML = kundText;
   restOut.innerHTML = restText;
+if (scrolla) {
+  document.getElementById("kundOut").scrollIntoView({ behavior: "smooth" });
+}
 
 }
 
