@@ -291,11 +291,20 @@ function uppdateraKundPaketering(kundIndex) {
     varde: l * bpl
   }));
 
-  paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund === kundIndex + 1)).concat(ny);
-  aktuellIndex = 0;
+  // 🔁 Behåll plats i listan vid uppdatering
+  const gamlaIndex = paketLista.findIndex(p => p.typ === 'kund' && p.kund === kundIndex + 1);
+  paketLista = paketLista.filter(p => !(p.typ === 'kund' && p.kund === kundIndex + 1));
+
+  if (gamlaIndex !== -1) {
+    paketLista.splice(gamlaIndex, 0, ...ny);
+    aktuellIndex = gamlaIndex;
+  } else {
+    paketLista = paketLista.concat(ny);
+  }
 
   visaPaket();
 }
+
 
     function justeraPaket(kundNr, andring) {
   const bpl = bradorPerLager[valdDimension] * valUrHyvel;
@@ -489,9 +498,13 @@ if (extra > 0) {
 
       aktuellIndex = 0;
       visaPaket();
+      document.getElementById("kundOut").scrollIntoView({ behavior: "smooth" });
+
     }
 
 function visaPaket() {
+  const scrollY = window.scrollY; // 🔹 Spara nuvarande scrollposition
+
   const kundOut = document.getElementById("kundOut");
   const restOut = document.getElementById("restOut");
   kundOut.textContent = "";
@@ -502,14 +515,10 @@ function visaPaket() {
     acc[p.kund].push(p);
     return acc;
   }, {});
-  // Säkerställ att aktuellIndex är inom giltigt intervall
-if (aktuellIndex >= paketLista.length) {
-  aktuellIndex = paketLista.length - 1;
-}
-if (aktuellIndex < 0) {
-  aktuellIndex = 0;
-}
 
+  // 🔸 Se till att aktuellIndex alltid är inom gräns
+  if (aktuellIndex >= paketLista.length) aktuellIndex = paketLista.length - 1;
+  if (aktuellIndex < 0) aktuellIndex = 0;
 
   let kundText = "";
   for (const [kundNr, paket] of Object.entries(kunder)) {
@@ -517,22 +526,17 @@ if (aktuellIndex < 0) {
     const totalLag = paket.reduce((sum, p) => sum + p.lager, 0);
     kundText += `Kund ${kundNr}:\n`;
     const extra = window.kundExtraBrador?.[kundNr - 1]?.extra || 0;
-kundText += `Totalt ${totalBr} brädor ⇒ ${paket.length} paket`;
-if (extra > 0) {
-  kundText += ` (${extra} extra)`;
+    kundText += `Totalt ${totalBr} brädor ⇒ ${paket.length} paket`;
+    if (extra > 0) kundText += ` (${extra} extra)`;
 
-}
-
-kundText += `<span class="knappgrupp">
+    kundText += `<span class="knappgrupp">
   <button onclick="justeraPaket(${kundNr}, -1)">–</button>
   <button onclick="justeraPaket(${kundNr}, 1)">+</button>
 </span>\n`;
 
-
     const markeradLager = paket.map(p =>
       paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager
     );
-
     const markeradBrador = paket.map(p =>
       paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde
     );
@@ -544,30 +548,30 @@ kundText += `<span class="knappgrupp">
   const restPak = paketLista.filter(p => p.typ === 'rest');
   let restText = "";
   if (restPak.length) {
-const totalRestLager = restPak.reduce((sum, p) => sum + p.lager, 0);
-restText += `Resterande paket:\n`;
-restText += `Totalt ${totalRestLager} lager ⇒ ${restPak.length} paket `;
-restText += `<span class="knappgrupp">
+    const totalRestLager = restPak.reduce((sum, p) => sum + p.lager, 0);
+    restText += `Resterande paket:\n`;
+    restText += `Totalt ${totalRestLager} lager ⇒ ${restPak.length} paket `;
+    restText += `<span class="knappgrupp">
   <button onclick="justeraRest(-1)">–</button>
   <button onclick="justeraRest(1)">+</button>
 </span>\n`;
 
-const markeradLager = restPak.map(p =>
-  paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager
-);
+    const markeradLager = restPak.map(p =>
+      paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.lager}</span>` : p.lager
+    );
+    const markeradBrador = restPak.map(p =>
+      paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde
+    );
 
-const markeradBrador = restPak.map(p =>
-  paketLista.indexOf(p) === aktuellIndex ? `<span class='bold'>${p.varde}</span>` : p.varde
-);
-
-restText += `  Lager: ${markeradLager.join(', ')}\n`;
-restText += `  Brädor: ${markeradBrador.join(', ')}`;
-
+    restText += `  Lager: ${markeradLager.join(', ')}\n`;
+    restText += `  Brädor: ${markeradBrador.join(', ')}`;
   }
 
   kundOut.innerHTML = kundText;
   restOut.innerHTML = restText;
+
 }
+
 
 
     function visaNasta() {
